@@ -1,6 +1,10 @@
-# Node
+# Node modules
 node_modules/
+
+# Environment variables
 .env
+
+# Uploaded audio files
 Uploads
 
 # Logs
@@ -8,6 +12,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# OS
+# System files
 .DS_Store
 Thumbs.db

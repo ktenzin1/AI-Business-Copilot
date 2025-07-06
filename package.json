@@ -1,0 +1,15 @@
+{
+  "name": "AI-Business-Copilot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.1",
+    "express": "^5.1.0",
+    "multer": "^2.0.1",
+    "openai": "^5.8.2"
+  }
+}

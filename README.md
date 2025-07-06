@@ -1,1 +1,1 @@
-# AI-Business-Copilot
+# AI-Business-Copilot - Automating mundane business workflows with your AI business copilot built for you and your business in mind. Use it like a plug in and your second brain so you don't have to worry about remembering every single detail about your clients. You focus on your clients and not the boring repetitive data entry. We'll take care of that for you!

@@ -33,17 +33,20 @@ const UploadForm = () => {
   return (
     <div>
       <h2>Upload Meeting Audio</h2>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="file"
-          accept="audio/*"
-          onChange={(e) => setAudio(e.target.files[0])}
-          required
-        />
-        <button type="submit" disabled={loading}>
-          {loading ? 'Processing...' : 'Transcribe + Summarize'}
-        </button>
-      </form>
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="audio-upload">Select audio file:</label>
+          <input
+            id="audio-upload"
+            type="file"
+            accept="audio/*"
+            onChange={(e) => setAudio(e.target.files[0])}
+            required
+          />
+          <button type="submit" disabled={loading}>
+            {loading ? 'Processing...' : 'Transcribe + Summarize'}
+          </button>
+        </form>
+
 
       {transcript && (
         <>

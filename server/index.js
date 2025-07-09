@@ -4,6 +4,7 @@ const cors = require('cors');
 const axios = require('axios');
 require('dotenv').config();
 const fs = require('fs');
+const OpenAI = require('openai');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
@@ -12,13 +13,24 @@ app.use(cors());
 app.use(express.json());
 
 const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+const openaiApiKey = process.env.OPENAI_API_KEY;
 
-// Debug: Check if API key is loaded
+// Debug: Check if API keys are loaded
 console.log('Deepgram API Key loaded:', deepgramApiKey ? 'Yes' : 'No');
+console.log('OpenAI API Key loaded:', openaiApiKey ? 'Yes' : 'No');
+
 if (!deepgramApiKey) {
   console.error('❌ DEEPGRAM_API_KEY not found in environment variables');
   process.exit(1);
 }
+
+if (!openaiApiKey) {
+  console.error('❌ OPENAI_API_KEY not found in environment variables');
+  process.exit(1);
+}
+
+// Initialize OpenAI client
+const openai = new OpenAI({ apiKey: openaiApiKey });
 
 app.post('/upload', upload.single('audio'), async (req, res) => {
   console.log('📁 Upload endpoint hit');
@@ -65,27 +77,49 @@ app.post('/upload', upload.single('audio'), async (req, res) => {
 
     console.log('📝 Transcript:', transcript.substring(0, 100) + '...');
 
-    // Step 4: Use OpenAI GPT (or any other) to summarize transcription
-    // For example, here you can use your OpenAI client to send transcript to GPT for summary.
-
-    // --- Example summary using OpenAI GPT-4o (replace with your setup) ---
-    // const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    // const summaryResponse = await openai.chat.completions.create({
-    //   model: 'gpt-4o',
-    //   messages: [
-    //     {
-    //       role: 'user',
-    //       content: `Summarize this meeting transcript into key points and action items:\n\n${transcript}`,
-    //     },
-    //   ],
-    // });
-    // const summary = summaryResponse.choices[0].message.content;
+    // Generate AI insights using OpenAI
+    console.log('🤖 Generating AI insights...');
+    let summary = 'Summary feature temporarily unavailable';
+    
+    try {
+      const summaryResponse = await openai.chat.completions.create({
+        model: 'gpt-4.1-nano', // Use correct model name
+        messages: [
+          {
+            role: 'system',
+            content: `You are an AI assistant specialized in analyzing meeting transcripts and audio content. 
+            Provide comprehensive insights including:
+            1. Key points and main topics discussed
+            2. Action items and decisions made
+            3. Important dates, numbers, or deadlines mentioned
+            4. Overall sentiment and tone
+            5. Participants' roles (if identifiable)
+            
+            Format your response in a clear, structured way with bullet points where appropriate.`
+          },
+          {
+            role: 'user',
+            content: `Please analyze this transcript and provide detailed insights:\n\n${transcript}`,
+          },
+        ],
+        max_tokens: 1000,
+        temperature: 0.3,
+      });
+      
+      summary = summaryResponse.choices[0].message.content;
+      console.log('✅ AI insights generated');
+      
+    } catch (openaiError) {
+      console.error('❌ OpenAI error:', openaiError.message);
+      summary = 'AI insights temporarily unavailable. Please try again later.';
+    }
 
     console.log('🎉 Sending response...');
     res.json({
       transcript: transcript,
-      summary: 'Summary feature coming soon!', // replace with real summary
+      summary: summary,
       confidence: response.data.results?.channels?.[0]?.alternatives?.[0]?.confidence || null,
+      processingTime: new Date().toISOString(),
     });
 
   } catch (error) {

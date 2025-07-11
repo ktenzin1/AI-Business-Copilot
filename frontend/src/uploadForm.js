@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const UploadForm = () => {
@@ -6,6 +6,21 @@ const UploadForm = () => {
   const [loading, setLoading] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [summary, setSummary] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [clients, setClients] = useState([]);
+
+  // Load clients on component mount
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const response = await axios.get('http://localhost:3001/clients');
+        setClients(response.data);
+      } catch (err) {
+        console.error('Error fetching clients:', err);
+      }
+    };
+    fetchClients();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -13,6 +28,12 @@ const UploadForm = () => {
 
     const formData = new FormData();
     formData.append('audio', audio);
+    
+    // Add client name if selected
+    if (clientName) {
+      formData.append('clientName', clientName);
+    }
+    
     setLoading(true);
 
     try {
@@ -33,20 +54,39 @@ const UploadForm = () => {
   return (
     <div>
       <h2>Upload Meeting Audio</h2>
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="audio-upload">Select audio file:</label>
-          <input
-            id="audio-upload"
-            type="file"
-            accept="audio/*"
-            onChange={(e) => setAudio(e.target.files[0])}
-            required
-          />
-          <button type="submit" disabled={loading}>
-            {loading ? 'Processing...' : 'Transcribe + Summarize'}
-          </button>
-        </form>
-
+      <form onSubmit={handleSubmit}>
+        {/* Client Selection */}
+        <div>
+          <label htmlFor="client-select">Select Client (Optional):</label>
+          <select
+            id="client-select"
+            value={clientName}
+            onChange={(e) => setClientName(e.target.value)}
+            style={{ marginLeft: '10px', padding: '5px', minWidth: '200px' }}
+          >
+            <option value="">-- No client context --</option>
+            {clients.map(client => (
+              <option key={client.id} value={client.name}>
+                {client.name} {client.company && `(${client.company})`}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        <br />
+        
+        <label htmlFor="audio-upload">Select audio file:</label>
+        <input
+          id="audio-upload"
+          type="file"
+          accept="audio/*"
+          onChange={(e) => setAudio(e.target.files[0])}
+          required
+        />
+        <button type="submit" disabled={loading}>
+          {loading ? 'Processing...' : 'Transcribe + Summarize'}
+        </button>
+      </form>
 
       {transcript && (
         <>
@@ -56,7 +96,7 @@ const UploadForm = () => {
       )}
       {summary && (
         <>
-          <h3>Summary</h3>
+          <h3>Summary {clientName && `(with ${clientName} context)`}</h3>
           <p>{summary}</p>
         </>
       )}

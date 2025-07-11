@@ -4,6 +4,7 @@ const cors = require('cors');
 const axios = require('axios');
 require('dotenv').config();
 const fs = require('fs');
+const path = require('path');
 const OpenAI = require('openai');
 
 const app = express();
@@ -11,6 +12,89 @@ const upload = multer({ dest: 'uploads/' });
 
 app.use(cors());
 app.use(express.json());
+
+const CLIENTS_PATH = path.join(__dirname, 'clients.json');
+
+// Helper to load or init file
+function loadClients() {
+  if (!fs.existsSync(CLIENTS_PATH)) return [];
+  return JSON.parse(fs.readFileSync(CLIENTS_PATH));
+}
+
+// Helper to save clients with ID generation
+function saveClient(clientData) {
+  const clients = loadClients();
+  const newClient = {
+    id: Date.now().toString(), // Simple ID generation
+    ...clientData,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  clients.push(newClient);
+  fs.writeFileSync(CLIENTS_PATH, JSON.stringify(clients, null, 2));
+  return newClient;
+}
+
+// POST /client - Save client info
+app.post('/client', (req, res) => {
+  try {
+    const savedClient = saveClient(req.body);
+    res.status(200).json({ message: 'Client saved', client: savedClient });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to save client' });
+  }
+});
+
+// GET /clients - Get all clients (for dropdown/search)
+app.get('/clients', (req, res) => {
+  try {
+    const clients = loadClients();
+    res.json(clients);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load clients' });
+  }
+});
+
+// GET /client/:identifier - Retrieve by name or ID
+app.get('/client/:identifier', (req, res) => {
+  const identifier = req.params.identifier.toLowerCase();
+  const clients = loadClients();
+  const client = clients.find(c => 
+    c.name.toLowerCase() === identifier || 
+    c.id === req.params.identifier
+  );
+  if (client) {
+    res.json(client);
+  } else {
+    res.status(404).json({ error: 'Client not found' });
+  }
+});
+
+// PUT /client/:id - Update client info
+app.put('/client/:id', (req, res) => {
+  try {
+    const clients = loadClients();
+    const clientIndex = clients.findIndex(c => c.id === req.params.id);
+    
+    if (clientIndex === -1) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    clients[clientIndex] = {
+      ...clients[clientIndex],
+      ...req.body,
+      updatedAt: new Date().toISOString()
+    };
+    
+    fs.writeFileSync(CLIENTS_PATH, JSON.stringify(clients, null, 2));
+    res.json({ message: 'Client updated', client: clients[clientIndex] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update client' });
+  }
+});
 
 const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
 const openaiApiKey = process.env.OPENAI_API_KEY;
@@ -32,10 +116,36 @@ if (!openaiApiKey) {
 // Initialize OpenAI client
 const openai = new OpenAI({ apiKey: openaiApiKey });
 
+// Enhanced upload endpoint with client context
 app.post('/upload', upload.single('audio'), async (req, res) => {
   console.log('📁 Upload endpoint hit');
   
   try {
+    // Get client name from request (you'll send this from frontend)
+    const clientName = req.body.clientName;
+    let clientContext = '';
+    
+    // If client name provided, get their context
+    if (clientName) {
+      try {
+        const clients = loadClients();
+        const client = clients.find(c => c.name.toLowerCase() === clientName.toLowerCase());
+        if (client) {
+          clientContext = `
+Client Context:
+- Name: ${client.name}
+- Company: ${client.company}
+- Goals: ${client.goals}
+- Notes: ${client.notes}
+- Previous interactions: ${client.createdAt ? 'Client since ' + new Date(client.createdAt).toDateString() : 'New client'}
+          `;
+          console.log('📋 Client context loaded for:', client.name);
+        }
+      } catch (err) {
+        console.log('⚠️ Could not load client context:', err.message);
+      }
+    }
+    
     // Debug: Check if file was uploaded
     if (!req.file) {
       console.log('❌ No file uploaded');
@@ -55,7 +165,7 @@ app.post('/upload', upload.single('audio'), async (req, res) => {
       {
         headers: {
           'Authorization': `Token ${deepgramApiKey}`,
-          'Content-Type': 'audio/wav', // Adjust based on your audio format
+          'Content-Type': 'audio/wav',
         },
         params: {
           punctuate: true,
@@ -77,25 +187,39 @@ app.post('/upload', upload.single('audio'), async (req, res) => {
 
     console.log('📝 Transcript:', transcript.substring(0, 100) + '...');
 
-    // Generate AI insights using OpenAI
-    console.log('🤖 Generating AI insights...');
+    // Generate AI insights using OpenAI with client context
+    console.log('🤖 Generating AI insights with client context...');
     let summary = 'Summary feature temporarily unavailable';
     
     try {
+      const contextualPrompt = clientContext ? 
+        `You are an AI assistant specialized in analyzing meeting transcripts. ${clientContext}
+
+Given the client context above, provide comprehensive insights including:
+1. Key points and main topics discussed
+2. How the discussion relates to the client's stated goals
+3. Action items and decisions made
+4. Important dates, numbers, or deadlines mentioned
+5. Overall sentiment and tone
+6. Recommendations based on the client's context
+
+Format your response in a clear, structured way with bullet points where appropriate.` :
+        `You are an AI assistant specialized in analyzing meeting transcripts and audio content. 
+        Provide comprehensive insights including:
+        1. Key points and main topics discussed
+        2. Action items and decisions made
+        3. Important dates, numbers, or deadlines mentioned
+        4. Overall sentiment and tone
+        5. Participants' roles (if identifiable)
+        
+        Format your response in a clear, structured way with bullet points where appropriate.`;
+      
       const summaryResponse = await openai.chat.completions.create({
-        model: 'gpt-4.1-nano', // Use correct model name
+        model: 'gpt-4.1-nano',
         messages: [
           {
             role: 'system',
-            content: `You are an AI assistant specialized in analyzing meeting transcripts and audio content. 
-            Provide comprehensive insights including:
-            1. Key points and main topics discussed
-            2. Action items and decisions made
-            3. Important dates, numbers, or deadlines mentioned
-            4. Overall sentiment and tone
-            5. Participants' roles (if identifiable)
-            
-            Format your response in a clear, structured way with bullet points where appropriate.`
+            content: contextualPrompt
           },
           {
             role: 'user',
@@ -107,17 +231,29 @@ app.post('/upload', upload.single('audio'), async (req, res) => {
       });
       
       summary = summaryResponse.choices[0].message.content;
-      console.log('✅ AI insights generated');
+      console.log('✅ AI insights generated with client context');
+      console.log('📝 Summary preview:', summary.substring(0, 200) + '...');
       
     } catch (openaiError) {
-      console.error('❌ OpenAI error:', openaiError.message);
-      summary = 'AI insights temporarily unavailable. Please try again later.';
+      console.error('❌ OpenAI error details:');
+      console.error('Message:', openaiError.message);
+      console.error('Code:', openaiError.code);
+      console.error('Type:', openaiError.type);
+      console.error('Status:', openaiError.status);
+      
+      if (openaiError.response) {
+        console.error('Response status:', openaiError.response.status);
+        console.error('Response data:', openaiError.response.data);
+      }
+      
+      summary = `AI insights error: ${openaiError.message}`;
     }
 
     console.log('🎉 Sending response...');
     res.json({
       transcript: transcript,
       summary: summary,
+      clientContext: clientContext ? 'Client context applied' : 'No client context',
       confidence: response.data.results?.channels?.[0]?.alternatives?.[0]?.confidence || null,
       processingTime: new Date().toISOString(),
     });

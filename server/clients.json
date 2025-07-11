@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Karma Tenzin",
+    "company": "Butterfly",
+    "goals": "Financial Report ready by end of August.",
+    "notes": "Client is not happy with current draft."
+  },
+  {
+    "id": "1752198332049",
+    "name": "Emma",
+    "company": "TestCompany",
+    "goals": "Improved project proposal",
+    "notes": "Client is currently dissatisfied with the current project proposal.",
+    "createdAt": "2025-07-11T01:45:32.049Z",
+    "updatedAt": "2025-07-11T01:45:32.050Z"
+  },
+  {
+    "id": "1752198868962",
+    "name": "Emma",
+    "company": "TestCompany",
+    "goals": "Project Proposal",
+    "notes": "Improve the proposal",
+    "createdAt": "2025-07-11T01:54:28.962Z",
+    "updatedAt": "2025-07-11T01:54:28.962Z"
+  }
+]

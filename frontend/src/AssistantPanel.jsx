@@ -31,11 +31,9 @@ setLoading(false);
 
 return (
 <div className="bg-white p-6 rounded-xl shadow-md border max-w-2xl mx-auto mt-12">
-<h2 className="text-xl font-semibold mb-4">💡 AI Assistant</h2>
+<h2 className="text-xl font-semibold mb-4">💡 AI Workflow Assistant</h2>
 
-bash
-Copy
-Edit
+Enter Client Id
   <input
     type="text"
     placeholder="Enter clientId (e.g. acme123)"
@@ -75,7 +73,7 @@ Edit
       className="bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800"
       onClick={() =>
         callEndpoint('draft-report', {
-          meetingId: 'meeting-001',
+          clientId,
           reportType: 'executive',
           includeTranscript: false,
         })

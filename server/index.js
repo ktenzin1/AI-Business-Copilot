@@ -1056,7 +1056,7 @@ Structure the proposal with clear sections and headers.`;
   }
 });
 
-// Draft meeting report endpoint
+// Fixed draft meeting report endpoint
 app.post('/draft-report', async (req, res) => {
   try {
     const { meetingId, reportType = 'summary', includeTranscript = false, customSections } = req.body;
@@ -1076,11 +1076,15 @@ app.post('/draft-report', async (req, res) => {
     const clients = loadClients();
     const client = clients.find(c => c.id === meeting.clientId);
     
-    // Get related context
-    const pastContext = await vectorSearch.getContextForPrompt(
-      `${meeting.title} ${meeting.transcript}`, 
-      meeting.clientId
-    );
+    // Get related context - Fix: Handle case where transcript might not exist
+    let pastContext = '';
+    try {
+      const contextQuery = `${meeting.title} ${meeting.transcript || meeting.summary || ''}`;
+      pastContext = await vectorSearch.getContextForPrompt(contextQuery, meeting.clientId);
+    } catch (contextError) {
+      console.warn('⚠️ Context search failed:', contextError);
+      pastContext = '';
+    }
     
     let reportPrompt = '';
     
@@ -1120,24 +1124,27 @@ app.post('/draft-report', async (req, res) => {
       reportPrompt += `\n\nInclude these custom sections: ${customSections}`;
     }
     
+    // Fix: Handle missing data gracefully
     const prompt = `You are creating a professional meeting report.
 
 MEETING DETAILS:
-- Title: ${meeting.title}
-- Date: ${meeting.date}
+- Title: ${meeting.title || 'N/A'}
+- Date: ${meeting.date || 'N/A'}
 - Client: ${client ? client.name : 'N/A'}
 - Company: ${client ? client.company : 'N/A'}
 
 MEETING SUMMARY:
-${meeting.summary}
+${meeting.summary || 'No summary available'}
 
-${includeTranscript ? `
+${includeTranscript && meeting.transcript ? `
 FULL TRANSCRIPT:
 ${meeting.transcript}
 ` : ''}
 
+${pastContext ? `
 RELATED CONTEXT:
 ${pastContext}
+` : ''}
 
 TASK: ${reportPrompt}
 
@@ -1149,28 +1156,43 @@ Format the report professionally with:
 
 Make it suitable for sharing with stakeholders.`;
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4.1-nano',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a professional meeting reporter creating comprehensive business reports.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_tokens: 1200,
-      temperature: 0.2
-    });
+    // Fix: Add error handling for OpenAI API call
+    let response;
+    try {
+      response = await openai.chat.completions.create({
+        model: 'gpt-4.1-nano',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional meeting reporter creating comprehensive business reports.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 1200,
+        temperature: 0.2
+      });
+    } catch (aiError) {
+      console.error('❌ OpenAI API error:', aiError);
+      return res.status(500).json({ 
+        error: 'Failed to generate report with AI', 
+        details: aiError.message 
+      });
+    }
+    
+    // Fix: Ensure response structure is correct
+    if (!response.choices || !response.choices[0] || !response.choices[0].message) {
+      return res.status(500).json({ error: 'Invalid AI response structure' });
+    }
     
     res.json({
       success: true,
       reportType,
       meeting: {
-        title: meeting.title,
-        date: meeting.date,
+        title: meeting.title || 'N/A',
+        date: meeting.date || 'N/A',
         client: client ? client.name : 'N/A'
       },
       includeTranscript,
@@ -1181,9 +1203,16 @@ Make it suitable for sharing with stakeholders.`;
     
   } catch (error) {
     console.error('❌ Draft report error:', error);
-    res.status(500).json({ error: 'Failed to draft report' });
+    
+    // Fix: More detailed error response
+    res.status(500).json({ 
+      error: 'Failed to draft report',
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
+
 
 // List available workflows endpoint
 app.get('/workflows', (req, res) => {
@@ -1214,7 +1243,7 @@ app.get('/workflows', (req, res) => {
         name: 'Draft Meeting Report',
         description: 'Generate professional meeting reports',
         parameters: {
-          required: ['meetingId'],
+          required: ['clientId'],
           optional: ['reportType', 'includeTranscript', 'customSections']
         },
         reportTypes: ['summary', 'executive', 'detailed', 'action-focused']

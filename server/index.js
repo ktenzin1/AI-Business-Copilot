@@ -794,6 +794,441 @@ app.get('/debug/context/:clientName', async (req, res) => {
   }
 });
 
+// Add these endpoints after your existing endpoints (around line 400, before the server start)
+
+// Draft follow-up email endpoint
+app.post('/draft-followup', async (req, res) => {
+  try {
+    const { clientId, meetingId, emailType = 'standard', customInstructions } = req.body;
+    
+    if (!clientId) {
+      return res.status(400).json({ error: 'Client ID is required' });
+    }
+    
+    // Get client info
+    const clients = loadClients();
+    const client = clients.find(c => c.id === clientId);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Get specific meeting if provided
+    let specificMeeting = null;
+    if (meetingId) {
+      const meetings = loadMeetings();
+      specificMeeting = meetings.find(m => m.id === meetingId);
+    }
+    
+    // Get relevant context from past meetings
+    const contextQuery = specificMeeting ? 
+      `${specificMeeting.title} ${specificMeeting.transcript}` : 
+      `recent meeting with ${client.name}`;
+    
+    const pastContext = await vectorSearch.getContextForPrompt(contextQuery, clientId);
+    
+    // Build email prompt based on type
+    let emailPrompt = '';
+    
+    switch (emailType) {
+      case 'thank-you':
+        emailPrompt = `Draft a professional thank-you follow-up email that:
+        - Thanks the client for their time
+        - Summarizes key discussion points
+        - Confirms next steps and commitments
+        - Maintains a warm, professional tone`;
+        break;
+      
+      case 'action-items':
+        emailPrompt = `Draft a follow-up email focused on action items that:
+        - Lists all action items from the meeting
+        - Assigns responsibilities clearly
+        - Includes deadlines and next steps
+        - Requests confirmation from the client`;
+        break;
+      
+      case 'proposal-request':
+        emailPrompt = `Draft a follow-up email requesting proposal information that:
+        - References the meeting discussion
+        - Outlines what information is needed
+        - Provides clear next steps
+        - Sets expectations for timeline`;
+        break;
+      
+      default:
+        emailPrompt = `Draft a professional follow-up email that:
+        - References the recent meeting
+        - Summarizes key points discussed
+        - Outlines next steps
+        - Maintains professional tone`;
+    }
+    
+    if (customInstructions) {
+      emailPrompt += `\n\nAdditional instructions: ${customInstructions}`;
+    }
+    
+    const prompt = `You are drafting a follow-up email for a business meeting.
+
+CLIENT INFORMATION:
+- Name: ${client.name}
+- Company: ${client.company || 'N/A'}
+- Goals: ${client.goals || 'N/A'}
+
+${specificMeeting ? `
+SPECIFIC MEETING CONTEXT:
+- Meeting: ${specificMeeting.title}
+- Date: ${specificMeeting.date}
+- Summary: ${specificMeeting.summary}
+- Key transcript excerpts: ${specificMeeting.transcript.substring(0, 1000)}...
+` : ''}
+
+RELEVANT PAST CONTEXT:
+${pastContext}
+
+TASK: ${emailPrompt}
+
+Format the email with:
+- Subject line
+- Professional greeting
+- Body paragraphs
+- Clear next steps
+- Professional closing
+
+Make it concise, actionable, and personalized to the client relationship.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4.1-nano',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional business communication assistant specializing in client follow-up emails.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 800,
+      temperature: 0.4
+    });
+    
+    res.json({
+      success: true,
+      emailType,
+      client: {
+        name: client.name,
+        company: client.company
+      },
+      meetingReference: specificMeeting ? specificMeeting.title : 'Recent meeting',
+      draftEmail: response.choices[0].message.content,
+      contextUsed: pastContext ? 'Yes' : 'No',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Draft follow-up error:', error);
+    res.status(500).json({ error: 'Failed to draft follow-up email' });
+  }
+});
+
+// Draft proposal endpoint
+app.post('/draft-proposal', async (req, res) => {
+  try {
+    const { clientId, proposalType = 'service', customRequirements, includeAllMeetings = true } = req.body;
+    
+    if (!clientId) {
+      return res.status(400).json({ error: 'Client ID is required' });
+    }
+    
+    // Get client info
+    const clients = loadClients();
+    const client = clients.find(c => c.id === clientId);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Get all meetings for this client
+    const meetings = loadMeetings().filter(m => m.clientId === clientId);
+    
+    // Get comprehensive context
+    const contextQuery = `${client.name} ${client.goals} ${client.company} requirements needs project scope`;
+    const pastContext = await vectorSearch.getContextForPrompt(contextQuery, clientId);
+    
+    // Build proposal prompt
+    let proposalPrompt = '';
+    
+    switch (proposalType) {
+      case 'service':
+        proposalPrompt = `Draft a comprehensive service proposal that includes:
+        - Executive summary
+        - Understanding of client needs
+        - Proposed solution/services
+        - Timeline and deliverables
+        - Investment/pricing structure
+        - Next steps`;
+        break;
+      
+      case 'project':
+        proposalPrompt = `Draft a detailed project proposal that includes:
+        - Project overview and objectives
+        - Scope of work
+        - Methodology and approach
+        - Timeline and milestones
+        - Resource requirements
+        - Budget and terms`;
+        break;
+      
+      case 'partnership':
+        proposalPrompt = `Draft a partnership proposal that includes:
+        - Partnership vision and goals
+        - Mutual benefits
+        - Roles and responsibilities
+        - Success metrics
+        - Terms and structure
+        - Implementation plan`;
+        break;
+      
+      default:
+        proposalPrompt = `Draft a professional business proposal that addresses the client's needs based on all meeting discussions.`;
+    }
+    
+    if (customRequirements) {
+      proposalPrompt += `\n\nSpecific requirements to address: ${customRequirements}`;
+    }
+    
+    const prompt = `You are drafting a business proposal based on comprehensive client interactions.
+
+CLIENT PROFILE:
+- Name: ${client.name}
+- Company: ${client.company || 'N/A'}
+- Goals: ${client.goals || 'N/A'}
+- Notes: ${client.notes || 'N/A'}
+
+MEETING HISTORY:
+- Total meetings: ${meetings.length}
+- Meeting summaries: ${meetings.map(m => `${m.title} (${m.date}): ${m.summary}`).join('\n')}
+
+COMPREHENSIVE CONTEXT FROM ALL INTERACTIONS:
+${pastContext}
+
+TASK: ${proposalPrompt}
+
+Create a professional, detailed proposal that:
+- Demonstrates deep understanding of the client's needs
+- References specific discussions and requirements from meetings
+- Provides clear value proposition
+- Includes actionable next steps
+- Maintains professional formatting
+
+Structure the proposal with clear sections and headers.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4.1-nano',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a senior business development professional creating comprehensive client proposals.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 1500,
+      temperature: 0.3
+    });
+    
+    res.json({
+      success: true,
+      proposalType,
+      client: {
+        name: client.name,
+        company: client.company
+      },
+      meetingsAnalyzed: meetings.length,
+      draftProposal: response.choices[0].message.content,
+      contextUsed: pastContext ? 'Yes' : 'No',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Draft proposal error:', error);
+    res.status(500).json({ error: 'Failed to draft proposal' });
+  }
+});
+
+// Draft meeting report endpoint
+app.post('/draft-report', async (req, res) => {
+  try {
+    const { meetingId, reportType = 'summary', includeTranscript = false, customSections } = req.body;
+    
+    if (!meetingId) {
+      return res.status(400).json({ error: 'Meeting ID is required' });
+    }
+    
+    // Get meeting info
+    const meetings = loadMeetings();
+    const meeting = meetings.find(m => m.id === meetingId);
+    if (!meeting) {
+      return res.status(404).json({ error: 'Meeting not found' });
+    }
+    
+    // Get client info
+    const clients = loadClients();
+    const client = clients.find(c => c.id === meeting.clientId);
+    
+    // Get related context
+    const pastContext = await vectorSearch.getContextForPrompt(
+      `${meeting.title} ${meeting.transcript}`, 
+      meeting.clientId
+    );
+    
+    let reportPrompt = '';
+    
+    switch (reportType) {
+      case 'executive':
+        reportPrompt = `Create an executive summary report that includes:
+        - Key decisions made
+        - Strategic implications
+        - Action items for leadership
+        - Next steps and timeline
+        - Risk considerations`;
+        break;
+      
+      case 'detailed':
+        reportPrompt = `Create a detailed meeting report that includes:
+        - Complete meeting overview
+        - Detailed discussion points
+        - All decisions and commitments
+        - Comprehensive action items
+        - Follow-up requirements`;
+        break;
+      
+      case 'action-focused':
+        reportPrompt = `Create an action-focused report that includes:
+        - All action items with owners
+        - Deadlines and timelines
+        - Dependencies and blockers
+        - Next meeting requirements
+        - Success metrics`;
+        break;
+      
+      default:
+        reportPrompt = `Create a comprehensive meeting summary report`;
+    }
+    
+    if (customSections) {
+      reportPrompt += `\n\nInclude these custom sections: ${customSections}`;
+    }
+    
+    const prompt = `You are creating a professional meeting report.
+
+MEETING DETAILS:
+- Title: ${meeting.title}
+- Date: ${meeting.date}
+- Client: ${client ? client.name : 'N/A'}
+- Company: ${client ? client.company : 'N/A'}
+
+MEETING SUMMARY:
+${meeting.summary}
+
+${includeTranscript ? `
+FULL TRANSCRIPT:
+${meeting.transcript}
+` : ''}
+
+RELATED CONTEXT:
+${pastContext}
+
+TASK: ${reportPrompt}
+
+Format the report professionally with:
+- Clear headers and sections
+- Bullet points for key items
+- Professional language
+- Actionable next steps
+
+Make it suitable for sharing with stakeholders.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4.1-nano',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional meeting reporter creating comprehensive business reports.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 1200,
+      temperature: 0.2
+    });
+    
+    res.json({
+      success: true,
+      reportType,
+      meeting: {
+        title: meeting.title,
+        date: meeting.date,
+        client: client ? client.name : 'N/A'
+      },
+      includeTranscript,
+      draftReport: response.choices[0].message.content,
+      contextUsed: pastContext ? 'Yes' : 'No',
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Draft report error:', error);
+    res.status(500).json({ error: 'Failed to draft report' });
+  }
+});
+
+// List available workflows endpoint
+app.get('/workflows', (req, res) => {
+  res.json({
+    availableWorkflows: [
+      {
+        endpoint: '/draft-followup',
+        name: 'Draft Follow-up Email',
+        description: 'Generate professional follow-up emails after meetings',
+        parameters: {
+          required: ['clientId'],
+          optional: ['meetingId', 'emailType', 'customInstructions']
+        },
+        emailTypes: ['standard', 'thank-you', 'action-items', 'proposal-request']
+      },
+      {
+        endpoint: '/draft-proposal',
+        name: 'Draft Proposal',
+        description: 'Create comprehensive proposals based on client meetings',
+        parameters: {
+          required: ['clientId'],
+          optional: ['proposalType', 'customRequirements', 'includeAllMeetings']
+        },
+        proposalTypes: ['service', 'project', 'partnership']
+      },
+      {
+        endpoint: '/draft-report',
+        name: 'Draft Meeting Report',
+        description: 'Generate professional meeting reports',
+        parameters: {
+          required: ['meetingId'],
+          optional: ['reportType', 'includeTranscript', 'customSections']
+        },
+        reportTypes: ['summary', 'executive', 'detailed', 'action-focused']
+      }
+    ],
+    features: {
+      contextAware: true,
+      multiMeetingAnalysis: true,
+      customizable: true,
+      professionalFormatting: true
+    }
+  });
+});
+
 // Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

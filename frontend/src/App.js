@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import UploadForm from './uploadForm.js';
 import ClientForm from './ClientForm';
+import AssistantPanel from './AssistantPanel.jsx';
 
 function App() {
   const [activeTab, setActiveTab] = useState('upload');
@@ -40,8 +41,11 @@ function App() {
         {activeTab === 'upload' && <UploadForm />}
         {activeTab === 'clients' && <ClientForm />}
       </div>
+      <AssistantPanel />
     </div>
   );
 }
+
+
 
 export default App;

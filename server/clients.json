@@ -22,5 +22,14 @@
     "notes": "Improve the proposal",
     "createdAt": "2025-07-11T01:54:28.962Z",
     "updatedAt": "2025-07-11T01:54:28.962Z"
+  },
+  {
+    "id": "1752274626006",
+    "name": "Emma",
+    "company": "TestCompany",
+    "goals": "Second project proposal",
+    "notes": "Client requested for another meeting",
+    "createdAt": "2025-07-11T22:57:06.006Z",
+    "updatedAt": "2025-07-11T22:57:06.006Z"
   }
 ]

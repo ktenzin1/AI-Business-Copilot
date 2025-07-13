@@ -10,7 +10,7 @@ const callEndpoint = async (endpoint, body) => {
 setLoading(true);
 setOutput('⏳ Generating...');
 try {
-const res = await fetch(`http://localhost:3001/${endpoint}`, {
+const res = await fetch(`https://ai-business-copilot-2.onrender.com/${endpoint}`, {
 method: 'POST',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify(body),

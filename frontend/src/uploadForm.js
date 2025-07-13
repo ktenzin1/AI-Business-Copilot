@@ -13,7 +13,7 @@ const UploadForm = () => {
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const response = await axios.get('http://localhost:3001/clients');
+        const response = await axios.get('https://ai-business-copilot-2.onrender.com/clients');
         setClients(response.data);
       } catch (err) {
         console.error('Error fetching clients:', err);
@@ -37,7 +37,7 @@ const UploadForm = () => {
     setLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:3001/upload', formData, {
+      const res = await axios.post('https://ai-business-copilot-2.onrender.com/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 

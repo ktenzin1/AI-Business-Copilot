@@ -37,7 +37,7 @@ const ClientForm = () => {
     setMessage({ type: '', text: '' });
     
     try {
-      await axios.post('http://localhost:3001/client', client);
+      await axios.post('https://ai-business-copilot-2.onrender.com/client', client);
       setMessage({ type: 'success', text: '✅ Client saved successfully!' });
       setClient({ name: '', company: '', goals: '', notes: '' });
     } catch (err) {

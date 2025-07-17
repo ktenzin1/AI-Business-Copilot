@@ -67,7 +67,7 @@ const UploadForm = ({ onClientSelect }) => {
       <form onSubmit={handleSubmit}>
         {/* Client Selection */}
         <div>
-          <label htmlFor="client-select">Select Client (Optional):</label>
+          <label htmlFor="client-select">Select Client (Required):</label>
           <select
             id="client-select"
             value={clientName}

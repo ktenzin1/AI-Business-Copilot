@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const UploadForm = () => {
+const UploadForm = ({ onClientSelect }) => {
   const [audio, setAudio] = useState(null);
   const [loading, setLoading] = useState(false);
   const [transcript, setTranscript] = useState('');
@@ -21,6 +21,16 @@ const UploadForm = () => {
     };
     fetchClients();
   }, []);
+
+  // Handle client selection and pass to parent
+  const handleClientChange = (e) => {
+    const selectedClientName = e.target.value;
+    setClientName(selectedClientName);
+    
+    // Find the full client object and pass it to parent
+    const selectedClient = clients.find(client => client.name === selectedClientName);
+    onClientSelect(selectedClient || null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -61,7 +71,7 @@ const UploadForm = () => {
           <select
             id="client-select"
             value={clientName}
-            onChange={(e) => setClientName(e.target.value)}
+            onChange={handleClientChange}
             style={{ marginLeft: '10px', padding: '5px', minWidth: '200px' }}
           >
             <option value="">-- No client context --</option>

@@ -58,6 +58,9 @@ function App() {
       </div>
 
       <p style={{ textAlign: "center", fontSize: "0.9em" }}>© 2025 Karma Yangchen Tenzin. All rights reserved.</p>
+
+      <meta name="copyright" content="© 2025 Karma Yangchen Tenzin. All rights reserved." />
+
     </div>
   );
 }
